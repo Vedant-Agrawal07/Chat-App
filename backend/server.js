@@ -62,4 +62,15 @@ io.on("connection", (socket) => {
     socket.to(room).emit("receive-message" , message , room);
   })
 
+  socket.on("removedUser" , (id)=>{
+    console.log("member " , id , " removed");
+    socket.to(id).emit("updateRemovedUser");
+
+  });
+
+  socket.on("typingIndicate" , (indicator , chatId)=>{
+    socket.to(chatId).emit("indicator" , indicator);
+  });
+
+
 });
