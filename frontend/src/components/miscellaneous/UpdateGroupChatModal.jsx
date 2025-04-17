@@ -163,7 +163,8 @@ const UpdateGroupChatModal = ({
         );
         console.log(data);
         setSelectedMembers(updatedList);
-        setFetchAgain(true);
+        socket.emit("removedUser" , member._id );
+        setFetchAgain(!fetchAgain);
         displayAllMessages();
         toast({
           title: "User removed",
@@ -208,7 +209,7 @@ const UpdateGroupChatModal = ({
         config
       );
       console.log(data);
-      setFetchAgain(true);
+      setFetchAgain(!fetchAgain);
       toast({
         title: "Left The Group",
         status: "success",
@@ -216,7 +217,7 @@ const UpdateGroupChatModal = ({
         isClosable: true,
         position: "bottom-left",
       });
-      setSelectedChat();
+      setSelectedChat("");
       onClose();
       return;
     } catch (error) {

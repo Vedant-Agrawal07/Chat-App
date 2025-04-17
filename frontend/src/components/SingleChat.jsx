@@ -16,6 +16,8 @@ import UpdateGroupChatModal from "./miscellaneous/UpdateGroupChatModal.jsx";
 import axios from "axios";
 import ScrollableChat from "./ScrollableChat.jsx";
 import io from "socket.io-client";
+import Lottie from "react-lottie";
+import typingAnimation from "../animation/typingAnimation.json";
 
 const ENDPOINT = "http://localhost:7000";
 
@@ -33,6 +35,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [loading, setLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
+  const [typingIndicator, setTypingIndicator] = useState(false);
   const toast = useToast();
 
   const sendMessage = async (event) => {
@@ -96,23 +99,57 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       } else {
         setMessages((prevMessages) => {
           if (!prevMessages.some((msg) => msg._id === message._id)) {
+            setFetchAgain(!fetchAgain);
             return [...prevMessages, message];
           }
-          return prevMessages; // Prevent duplicate messages
+          setFetchAgain(!fetchAgain);
+          return prevMessages;
         });
       }
     });
 
     return () => {
-      socket.off("receive-message"); // ✅ Cleanup previous listeners
+      socket.off("receive-message");
     };
   }, []);
 
+  useEffect(() => {
+    socket.on("updateRemovedUser", () => {
+      setFetchAgain(!fetchAgain);
+    });
+    return () => socket.off("updateRemovedUser");
+  }, []);
+
   const typingHandler = (e) => {
-    setNewMessage(e.target.value);
+    let value = e.target.value;
+    setNewMessage(value);
 
     // typing indicator logic
+
+    if (value === "") {
+      socket.emit("typingIndicate", false, SelectedChat._id);
+    }else{
+       socket.emit("typingIndicate", true, SelectedChat._id);
+    }
   };
+
+  // useEffect(() => {
+  //    if (!socket) {
+  //      return;
+  //    }
+  //   socket.emit("typingIndicate", true, SelectedChat._id);
+  //   return () => socket.off("typingIndicate");
+  // }, []);
+
+  useEffect(() => {
+    if (!socket) {
+      return;
+    }
+    socket.on("indicator", (indicator) => {
+      setTypingIndicator(indicator);
+    });
+    return () => socket.off("indicator");
+  }, []);
 
   const displayAllMessages = async () => {
     if (!SelectedChat) return;
@@ -153,6 +190,15 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     displayAllMessages();
     selectedChatCompare = SelectedChat;
   }, [SelectedChat]);
+
+  const defaultOptions = {
+    loop: true,
+    autoplay: true,
+    animationData: typingAnimation,
+    rendererSettings: {
+      preserveAspectRatio: "xMidYMid slice",
+    },
+  };
 
   return (
     <>
@@ -221,6 +267,17 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 >
                   <ScrollableChat messages={messages}></ScrollableChat>
                 </div>
+                {typingIndicator ? (
+                  <>
+                    <div
+                      style={{ display: "flex", justifyContent: "flex-start" , height:"40px",  width:"40px"}}
+                    >
+                      <Lottie style={{borderRadius:"10px" , marginTop:"7px" , opacity:"70%"}} options={defaultOptions} height={40} width={40} />
+                    </div>
+                  </>
+                ) : (
+                  <></>
+                )}
               </>
             )}
             <FormControl onKeyDown={sendMessage} isRequired mt={3}>

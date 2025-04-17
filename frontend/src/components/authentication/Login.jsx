@@ -54,6 +54,7 @@ const Login = () => {
 
       console.log(data);
 
+      localStorage.setItem("userInfo", JSON.stringify(data));
       toast({
         title: "Login Successfull",
         status: "success",
@@ -61,7 +62,6 @@ const Login = () => {
         isClosable: true,
         position: "bottom",
       });
-      localStorage.setItem("userInfo", JSON.stringify(data));
       setLoading(false);
       history.push("/chats");
       return;
