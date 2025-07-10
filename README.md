@@ -43,7 +43,7 @@ A full-stack real-time chat application built with React, Node.js, MongoDB, and 
 
 ```bash
 # Clone the project
-git clone https://github.com/yourusername/chat-app.git
+git clone https://github.com/Vedant-Agrawal07/Chat-App.git
 
 # Go to frontend directory
 cd frontend
