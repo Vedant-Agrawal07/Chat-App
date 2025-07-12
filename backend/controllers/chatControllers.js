@@ -169,7 +169,7 @@ const removeFromGroup = expressAsyncHandler(async (req, res) => {
   const remove = await Chat.findByIdAndUpdate(
     chatId,
     {
-      users:updatedUsers,
+      users: updatedUsers,
       groupAdmin: newAdmin,
     },
     {

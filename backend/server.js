@@ -36,41 +36,37 @@ server.listen(PORT, () => {
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "http://localhost:5173",
+    origin: "*",
   },
 });
 
 io.on("connection", (socket) => {
   console.log(`connected to ${socket.id}`);
 
-
   socket.on("setup", (userData) => {
     socket.join(userData._id);
     console.log(userData._id);
-    
+
     socket.emit("connected");
   });
 
-  socket.on("joinChat" , (room)=>{
+  socket.on("joinChat", (room) => {
     socket.join(room);
     console.log(`user joined room ${room}`);
-  })
+  });
 
-  socket.on("send-message" , (message , room)=>{
+  socket.on("send-message", (message, room) => {
     console.log(room);
 
-    socket.to(room).emit("receive-message" , message , room);
-  })
+    socket.to(room).emit("receive-message", message, room);
+  });
 
-  socket.on("removedUser" , (id)=>{
-    console.log("member " , id , " removed");
+  socket.on("removedUser", (id) => {
+    console.log("member ", id, " removed");
     socket.to(id).emit("updateRemovedUser");
-
   });
 
-  socket.on("typingIndicate" , (indicator , chatId)=>{
-    socket.to(chatId).emit("indicator" , indicator);
+  socket.on("typingIndicate", (indicator, chatId) => {
+    socket.to(chatId).emit("indicator", indicator);
   });
-
-
 });
