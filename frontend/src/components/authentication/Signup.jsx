@@ -110,7 +110,7 @@ const Signup = () => {
       );
 
       toast({
-        title: "Registration Successfull",
+        title: "Registration Successfull (Please Refresh)",
         status: "success",
         duration: 5000,
         isClosable: true,

@@ -56,7 +56,7 @@ const Login = () => {
 
       localStorage.setItem("userInfo", JSON.stringify(data));
       toast({
-        title: "Login Successfull",
+        title: "Login Successfull (Please Refresh)",
         status: "success",
         duration: 5000,
         isClosable: true,
