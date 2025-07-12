@@ -17,13 +17,16 @@ import { useHistory } from "react-router-dom";
 const homepage = () => {
   const history = useHistory();
 
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("userInfo"));
+ useEffect(() => {
+   const timer = setTimeout(() => {
+     const user = JSON.parse(localStorage.getItem("userInfo"));
+     if (user) {
+       history.push("/chats");
+     }
+   }, 100); // Delay gives localStorage time to update
 
-    if (user) {
-      history.push("/chats");
-    }
-  }, [history]);
+   return () => clearTimeout(timer);
+ }, [history]);
 
   // const user = JSON.parse(localStorage.getItem("userInfo"));
 
