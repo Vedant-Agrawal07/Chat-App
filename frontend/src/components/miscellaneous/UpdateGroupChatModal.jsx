@@ -50,7 +50,10 @@ const UpdateGroupChatModal = ({
           authorization: `Bearer ${user.token}`,
         },
       };
-      const { data } = await axios.get(`/api/user?search=${search}`, config);
+      const { data } = await axios.get(
+        `https://echo-chat-app-f5jz.onrender.com/api/user?search=${search}`,
+        config
+      );
       console.log(data);
       setSearchResult(data);
       setLoading(false);
@@ -96,7 +99,7 @@ const UpdateGroupChatModal = ({
 
         try {
           const { data } = await axios.put(
-            "/api/chat/groupadd",
+            "https://echo-chat-app-f5jz.onrender.com/api/chat/groupadd",
             { chatId: SelectedChat._id, userId: member._id },
             config
           );
@@ -157,7 +160,7 @@ const UpdateGroupChatModal = ({
       };
       try {
         const { data } = await axios.put(
-          "/api/chat/groupremove",
+          "https://echo-chat-app-f5jz.onrender.com/api/chat/groupremove",
           { chatId: SelectedChat._id, userId: member._id },
           config
         );
@@ -204,7 +207,7 @@ const UpdateGroupChatModal = ({
     };
     try {
       const { data } = await axios.put(
-        "/api/chat/groupremove",
+        "https://echo-chat-app-f5jz.onrender.com/api/chat/groupremove",
         { chatId: SelectedChat._id, userId: user._id },
         config
       );
@@ -253,7 +256,7 @@ const UpdateGroupChatModal = ({
       };
       try {
         const { data } = await axios.put(
-          "/api/chat/rename",
+          "https://echo-chat-app-f5jz.onrender.com/api/chat/rename",
           { chatId: SelectedChat._id, name: newChatName },
           config
         );

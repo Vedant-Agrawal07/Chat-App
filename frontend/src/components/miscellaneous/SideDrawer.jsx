@@ -82,7 +82,10 @@ const SideDrawer = () => {
         },
       };
 
-      const { data } = await axios.get(`/api/user?search=${search}`, config);
+      const { data } = await axios.get(
+        `https://echo-chat-app-f5jz.onrender.com/api/user?search=${search}`,
+        config
+      );
       console.log(data);
       setLoading(false);
       setsearchResult(data);
@@ -111,7 +114,7 @@ const SideDrawer = () => {
       };
 
       const { data } = await axios.post(
-        "/api/chat",
+        "https://echo-chat-app-f5jz.onrender.com/api/chat",
         {
           userId: userId,
         },
