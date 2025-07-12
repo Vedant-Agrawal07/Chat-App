@@ -44,7 +44,7 @@ server.listen(PORT, () => {
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "*",
+    origin: "https://chat-app-b4cc.vercel.app",
   },
 });
 
