@@ -8,8 +8,16 @@ import chatRoutes from "./routes/chatRoutes.js";
 import messageRoute from "./routes/messageRoute.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import cors from "cors";
+
 
 const app = express();
+app.use(
+  cors({
+    origin: "https://chat-app-b4cc.vercel.app",
+    credentials: true,
+  })
+);
 app.use(express.json()); // to accept json data
 
 dotenv.config();
