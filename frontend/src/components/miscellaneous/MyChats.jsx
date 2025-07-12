@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import { ChatState } from "../../Context/ChatProvider.jsx";
 import { Box, Button, Stack, Text, useToast } from "@chakra-ui/react";
-import expressAsyncHandler from "express-async-handler";
+// import expressAsyncHandler from "express-async-handler";
 import axios from "axios";
 import { AddIcon } from "@chakra-ui/icons";
 import ChatLoading from "../ChatLoading.jsx";
@@ -16,7 +16,7 @@ const MyChats = ({ fetchAgain }) => {
   const [loggedUser, setLoggedUser] = useState();
   const toast = useToast();
 
-  const fetchChats = expressAsyncHandler(async (req, res) => {
+  const fetchChats = (async (req, res) => {
     try {
       const config = {
         headers: {

@@ -19,7 +19,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import GroupMembers from "./GroupMembers";
-import expressAsyncHandler from "express-async-handler";
+// import expressAsyncHandler from "express-async-handler";
 import axios from "axios";
 import UserListItem from "../userAvatar/UserListItem";
 // import { application } from "express";
@@ -42,7 +42,7 @@ const UpdateGroupChatModal = ({
   const toast = useToast();
   // console.log(SelectedChat.groupAdmin._id);
 
-  const searchUsers = expressAsyncHandler(async () => {
+  const searchUsers = (async () => {
     setLoading(true);
     try {
       const config = {
@@ -87,7 +87,7 @@ const UpdateGroupChatModal = ({
     }
   }, [search]);
 
-  const updateMembers = expressAsyncHandler(async (member) => {
+  const updateMembers = (async (member) => {
     if (user._id === SelectedChat.groupAdmin._id) {
       if (!selectedMembers.find((c) => c._id === member._id)) {
         const config = {
@@ -148,7 +148,7 @@ const UpdateGroupChatModal = ({
     }
   });
 
-  const removeFromGroup = expressAsyncHandler(async (member) => {
+  const removeFromGroup = (async (member) => {
     if (user._id === SelectedChat.groupAdmin._id) {
       const updatedList = selectedMembers.filter((c) => c._id !== member._id);
 
@@ -198,7 +198,7 @@ const UpdateGroupChatModal = ({
     }
   });
 
-  const groupLeave = expressAsyncHandler(async () => {
+  const groupLeave = (async () => {
     const config = {
       headers: {
         "Content-type": "application/json",
@@ -236,7 +236,7 @@ const UpdateGroupChatModal = ({
     }
   });
 
-  const updateGroupName = expressAsyncHandler(async () => {
+  const updateGroupName = (async () => {
     if (newChatName === "") {
       toast({
         title: "Please enter chat name",

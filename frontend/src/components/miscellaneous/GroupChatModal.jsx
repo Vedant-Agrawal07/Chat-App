@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import React, { useEffect, useState } from "react";
 import { ChatState } from "../../Context/ChatProvider.jsx";
-import expressAsyncHandler from "express-async-handler";
+// import expressAsyncHandler from "express-async-handler";
 import axios from "axios";
 import MemberList from "./MemberList.jsx";
 import GroupMembers from "./GroupMembers.jsx";
@@ -32,7 +32,7 @@ const GroupChatModal = ({ children }) => {
   const toast = useToast();
   const { user, chats, setChats } = ChatState();
 
-  const searchUsers = expressAsyncHandler(async () => {
+  const searchUsers = (async () => {
     setLoading(true);
     try {
       const config = {
@@ -97,7 +97,7 @@ const GroupChatModal = ({ children }) => {
     return;
   };
 
-  const createGroupChat = expressAsyncHandler(async () => {
+  const createGroupChat = (async () => {
     setLoading(true);
     const config = {
       headers: {

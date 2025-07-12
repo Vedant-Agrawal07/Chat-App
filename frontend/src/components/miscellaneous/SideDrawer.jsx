@@ -27,7 +27,7 @@ import { BellIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import { ChatState } from "../../Context/ChatProvider.jsx";
 import ProfileModal from "./ProfileModal.jsx";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min.js";
-import expressAsyncHandler from "express-async-handler";
+// import expressAsyncHandler from "express-async-handler";
 import axios from "axios";
 import ChatLoading from "../ChatLoading.jsx";
 import UserListItem from "../userAvatar/UserListItem.jsx";
@@ -62,7 +62,7 @@ const SideDrawer = () => {
 
   const toast = useToast();
 
-  const handleSearch = expressAsyncHandler(async () => {
+  const handleSearch = (async () => {
     if (!search) {
       toast({
         title: "please enter something in search",
@@ -103,7 +103,7 @@ const SideDrawer = () => {
     }
   });
 
-  const accessChat = expressAsyncHandler(async (userId) => {
+  const accessChat = (async (userId) => {
     try {
       setLoadingChat(true);
       const config = {
