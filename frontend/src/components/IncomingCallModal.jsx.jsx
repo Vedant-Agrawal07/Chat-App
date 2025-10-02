@@ -30,21 +30,23 @@ export default function IncomingCallModal({
   onReject,
   className = "",
 }) {
-  const containerClasses = `fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-700/95 via-slate-800/95 to-slate-900/95 text-white ${className}`;
-
   return (
     <div
-      className={containerClasses}
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm text-white ${className}`}
       role="dialog"
       aria-modal="true"
       aria-label="Incoming call"
     >
+      {/* Optional overlay */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-80"
-        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
       />
+
+      {/* Modal content */}
       <div className="relative z-10 w-full max-w-xl px-6">
         <div className="flex flex-col items-center gap-8 rounded-[2.5rem] border border-white/10 bg-slate-900/40 backdrop-blur-3xl px-10 pb-12 pt-14 text-center shadow-[0_45px_120px_-60px_rgba(4,7,22,0.95)]">
+          {/* Avatar / Caller initials */}
           <div className="relative flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/80 via-blue-600/80 to-blue-700/60 text-4xl font-semibold text-white shadow-xl">
             <span className="absolute -top-4 right-0 h-11 w-11 rounded-full bg-slate-900/50 backdrop-blur-xl">
               <span className="absolute inset-0 animate-pulse rounded-full bg-emerald-400/50" />
@@ -54,6 +56,8 @@ export default function IncomingCallModal({
             </span>
             {caller.slice(0, 2).toUpperCase()}
           </div>
+
+          {/* Call info */}
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.4em] text-white/60">
               Incoming call
@@ -67,6 +71,8 @@ export default function IncomingCallModal({
               Live video
             </div>
           </div>
+
+          {/* Action buttons */}
           <div className="flex flex-wrap items-center justify-center gap-4">
             <ActionButton
               icon={Phone}

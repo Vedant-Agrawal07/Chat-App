@@ -289,30 +289,14 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 
       {/* Incoming Call Modal */}
       {incomingCall && (
-        <div
-          style={{
-            position: "fixed",
-            top: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9999,
-            width: "90%",
-            maxWidth: "400px",
-            backgroundColor: "#25D366",
-            borderRadius: "10px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            padding: "10px",
+        <IncomingCallModal
+          caller={incomingCall}
+          onAccept={() => {
+            setShowCall(true);
+            setIncomingCall(null);
           }}
-        >
-          <IncomingCallModal
-            caller={incomingCall}
-            onAccept={() => {
-              setShowCall(true);
-              setIncomingCall(null);
-            }}
-            onReject={() => setIncomingCall(null)}
-          />
-        </div>
+          onReject={() => setIncomingCall(null)}
+        />
       )}
 
       {/* Video Call Window */}
