@@ -25,7 +25,6 @@ function ActionButton({ icon: Icon, label, tone, onClick }) {
 
 export default function IncomingCallModal({
   caller,
-  callerSocketId,
   subtitle,
   onAccept,
   onReject,
@@ -74,7 +73,7 @@ export default function IncomingCallModal({
               icon={Phone}
               label="Join call"
               tone="positive"
-              onClick={() => onAccept(callerSocketId)}
+              onClick={onAccept}
             />
             <ActionButton
               icon={PhoneOff}

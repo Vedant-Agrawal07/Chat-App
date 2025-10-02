@@ -1,135 +1,147 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, IconButton } from "@chakra-ui/react";
-import { X } from "lucide-react";
-import { ChatState } from "../Context/ChatProvider.jsx";
-import io from "socket.io-client";
+import { io } from "socket.io-client";
+import { Phone, PhoneOff, Video, Mic, MicOff } from "lucide-react";
 
 const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
 let socket;
 
-export default function VideoCallWindow({ onClose, chatId, remoteSocketId }) {
-  const { user } = ChatState();
+export default function VideoCallWindow({ onClose, chatId }) {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
-  const pcRef = useRef(null);
 
-  const [stream, setStream] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [peerConnection, setPeerConnection] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [videoEnabled, setVideoEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(true);
 
   useEffect(() => {
     socket = io(ENDPOINT);
 
+    // --- Get local media ---
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
-      .then((mediaStream) => {
-        setStream(mediaStream);
-        if (localVideoRef.current)
-          localVideoRef.current.srcObject = mediaStream;
+      .then((stream) => {
+        setLocalStream(stream);
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      })
+      .catch((err) => console.error("Error accessing media devices:", err));
 
-        pcRef.current = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        });
+    socket.on("incoming-call", ({ fromUserId, callerSocketId }) => {
+      createPeerConnection(callerSocketId, true);
+    });
 
-        // Add local tracks to PeerConnection
-        mediaStream
-          .getTracks()
-          .forEach((track) => pcRef.current.addTrack(track, mediaStream));
+    socket.on("call-accepted", ({ answer }) => {
+      peerConnection?.setRemoteDescription(answer);
+    });
 
-        // Handle remote stream
-        pcRef.current.ontrack = (event) => {
-          if (remoteVideoRef.current)
-            remoteVideoRef.current.srcObject = event.streams[0];
-        };
-
-        // Send ICE candidates
-        pcRef.current.onicecandidate = (event) => {
-          if (event.candidate && remoteSocketId) {
-            socket.emit("webrtc-candidate", {
-              toSocketId: remoteSocketId,
-              candidate: event.candidate,
-            });
-          }
-        };
-      });
-
-    // Listen for incoming WebRTC events
     socket.on("webrtc-offer", async ({ offer, fromSocketId }) => {
-      await pcRef.current.setRemoteDescription(
-        new RTCSessionDescription(offer)
-      );
-      const answer = await pcRef.current.createAnswer();
-      await pcRef.current.setLocalDescription(answer);
+      if (!peerConnection) createPeerConnection(fromSocketId, false);
+      await peerConnection.setRemoteDescription(offer);
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
       socket.emit("webrtc-answer", { toSocketId: fromSocketId, answer });
     });
 
     socket.on("webrtc-answer", async ({ answer }) => {
-      await pcRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
+      await peerConnection?.setRemoteDescription(answer);
     });
 
-    socket.on("webrtc-candidate", async ({ candidate }) => {
-      try {
-        await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.error(err);
-      }
+    socket.on("webrtc-candidate", ({ candidate }) => {
+      peerConnection?.addIceCandidate(candidate);
     });
 
-    socket.on("call-ended", () => {
-      cleanup();
-    });
+    socket.on("call-ended", () => endCall());
 
-    return () => cleanup();
+    return () => {
+      endCall();
+      socket.disconnect();
+    };
   }, []);
 
-  const cleanup = () => {
-    if (pcRef.current) pcRef.current.close();
-    if (stream) stream.getTracks().forEach((track) => track.stop());
-    onClose();
+  const createPeerConnection = (remoteSocketId, isCaller) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    localStream
+      ?.getTracks()
+      .forEach((track) => pc.addTrack(track, localStream));
+
+    const remoteStreamObj = new MediaStream();
+    setRemoteStream(remoteStreamObj);
+    if (remoteVideoRef.current)
+      remoteVideoRef.current.srcObject = remoteStreamObj;
+
+    pc.ontrack = (event) => {
+      event.streams[0]
+        .getTracks()
+        .forEach((track) => remoteStreamObj.addTrack(track));
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("webrtc-candidate", {
+          toSocketId: remoteSocketId,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    setPeerConnection(pc);
+
+    if (isCaller) {
+      pc.createOffer().then((offer) =>
+        pc.setLocalDescription(offer).then(() => {
+          socket.emit("webrtc-offer", { toSocketId: remoteSocketId, offer });
+        })
+      );
+    }
   };
 
-  const handleEndCall = () => {
-    if (remoteSocketId) socket.emit("end-call", { toSocketId: remoteSocketId });
-    cleanup();
+  const toggleVideo = () => {
+    localStream.getVideoTracks()[0].enabled = !videoEnabled;
+    setVideoEnabled(!videoEnabled);
+  };
+
+  const toggleAudio = () => {
+    localStream.getAudioTracks()[0].enabled = !audioEnabled;
+    setAudioEnabled(!audioEnabled);
+  };
+
+  const endCall = () => {
+    peerConnection?.close();
+    localStream?.getTracks().forEach((track) => track.stop());
+    setPeerConnection(null);
+    setRemoteStream(null);
+    setLocalStream(null);
+    onClose();
+    socket.emit("end-call", { toSocketId: chatId });
   };
 
   return (
-    <Box
-      position="fixed"
-      top="10%"
-      left="10%"
-      w="80%"
-      h="80%"
-      bg="black"
-      zIndex={9999}
-      borderRadius="md"
-      overflow="hidden"
-    >
-      <video
-        ref={localVideoRef}
-        autoPlay
-        muted
-        style={{
-          width: "30%",
-          position: "absolute",
-          top: 10,
-          right: 10,
-          borderRadius: 8,
-        }}
-      />
-      <video
-        ref={remoteVideoRef}
-        autoPlay
-        style={{ width: "100%", height: "100%" }}
-      />
-      <IconButton
-        icon={<X />}
-        position="absolute"
-        top={2}
-        right={2}
-        onClick={handleEndCall}
-        colorScheme="red"
-      />
-    </Box>
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black">
+      <div className="flex gap-4">
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          className="w-48 h-36 bg-black"
+        />
+        <video ref={remoteVideoRef} autoPlay className="w-48 h-36 bg-black" />
+      </div>
+
+      <div className="mt-4 flex gap-4">
+        <button onClick={toggleVideo}>
+          {videoEnabled ? <Video /> : <Video className="line-through" />}
+        </button>
+        <button onClick={toggleAudio}>
+          {audioEnabled ? <Mic /> : <MicOff />}
+        </button>
+        <button onClick={endCall}>
+          <PhoneOff />
+        </button>
+      </div>
+    </div>
   );
 }
