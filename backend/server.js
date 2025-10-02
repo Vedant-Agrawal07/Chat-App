@@ -10,7 +10,6 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 
-
 const app = express();
 app.use(
   cors({
@@ -22,7 +21,7 @@ app.use(
 );
 
 app.options("*", cors());
-app.use(express.json()); 
+app.use(express.json());
 
 dotenv.config();
 connectDB();
@@ -52,29 +51,37 @@ const io = new Server(server, {
   },
 });
 
+// Map to store online users: userId -> socketId
+const onlineUsers = new Map();
+
 io.on("connection", (socket) => {
   console.log(`connected to ${socket.id}`);
 
+  // Save user socket
   socket.on("setup", (userData) => {
     socket.join(userData._id);
-    console.log(userData._id);
-
+    onlineUsers.set(userData._id, socket.id);
+    console.log("User connected:", userData._id);
     socket.emit("connected");
   });
 
+  socket.on("disconnect", () => {
+    for (let [userId, sId] of onlineUsers.entries()) {
+      if (sId === socket.id) onlineUsers.delete(userId);
+    }
+  });
+
+  // Messaging events (unchanged)
   socket.on("joinChat", (room) => {
     socket.join(room);
     console.log(`user joined room ${room}`);
   });
 
   socket.on("send-message", (message, room) => {
-    console.log(room);
-
     socket.to(room).emit("receive-message", message, room);
   });
 
   socket.on("removedUser", (id) => {
-    console.log("member ", id, " removed");
     socket.to(id).emit("updateRemovedUser");
   });
 
@@ -83,33 +90,33 @@ io.on("connection", (socket) => {
   });
 
   // --- VIDEO CALL / WEBRTC EVENTS ---
-  socket.on("call-user", ({ chatId, from }) => {
-    // Emit incoming call to everyone in the chat room except the caller
-    socket.to(chatId).emit("incoming-call", { from });
+  socket.on("call-user", ({ toUserId, fromUserId }) => {
+    const calleeSocketId = onlineUsers.get(toUserId);
+    if (calleeSocketId) {
+      io.to(calleeSocketId).emit("incoming-call", {
+        fromUserId,
+        callerSocketId: socket.id,
+      });
+    }
   });
 
-  socket.on("accept-call", ({ to, answer }) => {
-    // Send the SDP answer back to the caller
-    socket.to(to).emit("call-accepted", { answer });
+  socket.on("accept-call", ({ callerSocketId, answer }) => {
+    io.to(callerSocketId).emit("call-accepted", { answer });
   });
 
-  socket.on("webrtc-offer", ({ to, offer }) => {
-    // Send the SDP offer to the callee
-    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
+  socket.on("webrtc-offer", ({ toSocketId, offer }) => {
+    io.to(toSocketId).emit("webrtc-offer", { offer, fromSocketId: socket.id });
   });
 
-  socket.on("webrtc-answer", ({ to, answer }) => {
-    // Send the SDP answer to the caller
-    socket.to(to).emit("webrtc-answer", { answer });
+  socket.on("webrtc-answer", ({ toSocketId, answer }) => {
+    io.to(toSocketId).emit("webrtc-answer", { answer });
   });
 
-  socket.on("webrtc-candidate", ({ to, candidate }) => {
-    // Exchange ICE candidates
-    socket.to(to).emit("webrtc-candidate", { candidate });
+  socket.on("webrtc-candidate", ({ toSocketId, candidate }) => {
+    io.to(toSocketId).emit("webrtc-candidate", { candidate });
   });
 
-  socket.on("end-call", ({ to }) => {
-    // Notify the other user the call ended
-    socket.to(to).emit("call-ended");
+  socket.on("end-call", ({ toSocketId }) => {
+    io.to(toSocketId).emit("call-ended");
   });
 });

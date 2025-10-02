@@ -15,7 +15,13 @@ const socket = io(ENDPOINT);
 
 let pc;
 
-export default function VideoCallWindow({ onClose, chatId }) {
+export default function VideoCallWindow({
+  onClose,
+  chatId,
+  calleeSocketId,
+  callerSocketId,
+  isCaller,
+}) {
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
   const [localStream, setLocalStream] = useState(null);
@@ -39,41 +45,39 @@ export default function VideoCallWindow({ onClose, chatId }) {
     pc = new RTCPeerConnection(configuration);
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        socket.emit("message", {
-          type: "candidate",
+        socket.emit("webrtc-candidate", {
+          toSocketId: isCaller ? calleeSocketId : callerSocketId,
           candidate: e.candidate,
-          chatId,
         });
       }
     };
     pc.ontrack = (e) => (remoteVideo.current.srcObject = e.streams[0]);
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-    socket.emit("message", { type: "ready", chatId });
+    if (isCaller) {
+      // Caller creates offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("webrtc-offer", { toSocketId: calleeSocketId, offer });
+    }
 
-    socket.on("message", async (msg) => {
-      if (msg.chatId !== chatId) return;
-      switch (msg.type) {
-        case "offer":
-          await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("message", { type: "answer", sdp: answer.sdp, chatId });
-          break;
-        case "answer":
-          await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
-          break;
-        case "candidate":
-          if (msg.candidate) await pc.addIceCandidate(msg.candidate);
-          break;
-        default:
-          break;
+    // Listen for signaling messages
+    socket.on("webrtc-offer", async ({ offer, fromSocketId }) => {
+      if (!pc.currentRemoteDescription) {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("webrtc-answer", { toSocketId: fromSocketId, answer });
       }
     });
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("message", { type: "offer", sdp: offer.sdp, chatId });
+    socket.on("webrtc-answer", async ({ answer }) => {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    });
+
+    socket.on("webrtc-candidate", async ({ candidate }) => {
+      if (candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    });
   }
 
   function toggleVideo() {
@@ -101,11 +105,8 @@ export default function VideoCallWindow({ onClose, chatId }) {
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 flex items-center justify-center z-50">
-      {/* Main Container - Full Screen */}
       <div className="w-full h-full flex flex-col p-6">
-        {/* Video Grid - Takes most space */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 mb-4">
-          {/* Remote Video */}
           <div className="relative bg-slate-900/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/10 shadow-xl">
             <video
               ref={remoteVideo}
@@ -117,8 +118,6 @@ export default function VideoCallWindow({ onClose, chatId }) {
               <span className="text-white text-xs font-medium">Remote</span>
             </div>
           </div>
-
-          {/* Local Video */}
           <div className="relative bg-slate-900/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/10 shadow-xl">
             <video
               ref={localVideo}
@@ -132,12 +131,9 @@ export default function VideoCallWindow({ onClose, chatId }) {
             </div>
           </div>
         </div>
-
-        {/* Control Panel - Fixed at bottom */}
         <div className="flex justify-center">
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl px-8 py-4 shadow-2xl">
             <div className="flex items-center justify-center gap-3">
-              {/* Video Toggle */}
               <button
                 onClick={toggleVideo}
                 className={`p-4 rounded-xl transition-all duration-200 border ${
@@ -152,8 +148,6 @@ export default function VideoCallWindow({ onClose, chatId }) {
                   <VideoOff className="w-5 h-5 text-white" />
                 )}
               </button>
-
-              {/* Audio Toggle */}
               <button
                 onClick={toggleAudio}
                 className={`p-4 rounded-xl transition-all duration-200 border ${
@@ -168,8 +162,6 @@ export default function VideoCallWindow({ onClose, chatId }) {
                   <MicOff className="w-5 h-5 text-white" />
                 )}
               </button>
-
-              {/* Hangup Button */}
               <button
                 onClick={hangup}
                 className="p-4 rounded-xl bg-red-500/90 backdrop-blur-md border border-red-400/30 hover:bg-red-600 transition-all duration-200"
