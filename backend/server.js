@@ -90,33 +90,24 @@ io.on("connection", (socket) => {
   });
 
   // --- VIDEO CALL / WEBRTC EVENTS ---
-  socket.on("call-user", ({ toUserId, fromUserId }) => {
-    const calleeSocketId = onlineUsers.get(toUserId);
-    if (calleeSocketId) {
-      io.to(calleeSocketId).emit("incoming-call", {
-        fromUserId,
-        callerSocketId: socket.id,
-      });
-    }
+  socket.on("call-user", ({ chatId, from }) => {
+    // send to everyone in the chat room except sender
+    socket.to(chatId).emit("incoming-call", { from });
   });
 
-  socket.on("accept-call", ({ callerSocketId, answer }) => {
-    io.to(callerSocketId).emit("call-accepted", { answer });
+  socket.on("webrtc-offer", ({ to, offer }) => {
+    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
   });
 
-  socket.on("webrtc-offer", ({ toSocketId, offer }) => {
-    io.to(toSocketId).emit("webrtc-offer", { offer, fromSocketId: socket.id });
+  socket.on("webrtc-answer", ({ to, answer }) => {
+    socket.to(to).emit("webrtc-answer", { answer });
   });
 
-  socket.on("webrtc-answer", ({ toSocketId, answer }) => {
-    io.to(toSocketId).emit("webrtc-answer", { answer });
+  socket.on("webrtc-candidate", ({ to, candidate }) => {
+    socket.to(to).emit("webrtc-candidate", { candidate });
   });
 
-  socket.on("webrtc-candidate", ({ toSocketId, candidate }) => {
-    io.to(toSocketId).emit("webrtc-candidate", { candidate });
-  });
-
-  socket.on("end-call", ({ toSocketId }) => {
-    io.to(toSocketId).emit("call-ended");
+  socket.on("end-call", ({ to }) => {
+    socket.to(to).emit("call-ended");
   });
 });
