@@ -67,7 +67,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       }
     });
 
-    socket.on("incoming-call", ({ from }) => setIncomingCall(from));
+    // --- FIXED INCOMING CALL LISTENER ---
+    socket.on("incoming-call", (from) => {
+      console.log("Incoming call from:", from); // debug
+      setIncomingCall(from);
+    });
 
     socket.on("updateRemovedUser", () => setFetchAgain(!fetchAgain));
 
@@ -160,12 +164,19 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     rendererSettings: { preserveAspectRatio: "xMidYMid slice" },
   };
 
-  // --- Call Button Handler ---
+  // --- Outgoing Call Handler ---
   const handleVideoCall = () => {
     if (!SelectedChat) return;
-    // Emit to server to notify others in the chat
-    socket.emit("call-user", { chatId: SelectedChat._id, from: user.name });
+    socket.emit("call-user", { to: SelectedChat._id, from: user._id });
     setShowCall(true);
+  };
+
+  // --- Accept incoming call ---
+  const acceptCall = () => {
+    if (!incomingCall) return;
+    socket.emit("accept-call", { to: incomingCall });
+    setShowCall(true);
+    setIncomingCall(null);
   };
 
   return (
@@ -291,10 +302,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       {incomingCall && (
         <IncomingCallModal
           caller={incomingCall}
-          onAccept={() => {
-            setShowCall(true);
-            setIncomingCall(null);
-          }}
+          onAccept={acceptCall}
           onReject={() => setIncomingCall(null)}
         />
       )}
