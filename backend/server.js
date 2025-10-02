@@ -91,22 +91,37 @@ io.on("connection", (socket) => {
 
   // --- VIDEO CALL / WEBRTC EVENTS ---
   socket.on("call-user", ({ chatId, from }) => {
-    console.log(`Call initiated in chat ${chatId} by ${from.name}`);
-    socket.to(chatId).emit("incoming-call", { from });
+    console.log(`Call initiated in chat ${chatId} by ${from.name || from}`);
+    socket.to(chatId).emit("incoming-call", { from: from.name || from });
   });
 
   socket.on("join-call-room", ({ chatId }) => {
-    socket.join(`call-${chatId}`);
-    console.log(`Socket ${socket.id} joined call room: call-${chatId}`);
+    const roomName = `call-${chatId}`;
+    socket.join(roomName);
 
-    // Notify others in the call room that someone joined
-    socket.to(`call-${chatId}`).emit("user-joined-call", {
-      socketId: socket.id,
+    console.log(`Socket ${socket.id} joined call room: ${roomName}`);
+
+    // Get all other sockets in this room
+    const clientsInRoom = io.sockets.adapter.rooms.get(roomName);
+    const otherClients = clientsInRoom
+      ? Array.from(clientsInRoom).filter((id) => id !== socket.id)
+      : [];
+
+    console.log(`Other clients in room:`, otherClients);
+
+    // Notify this user about existing users
+    otherClients.forEach((clientId) => {
+      console.log(`Notifying ${socket.id} about existing ${clientId}`);
+      socket.emit("user-joined-call", { socketId: clientId });
     });
+
+    // Notify others about this new user
+    console.log(`Notifying room about new user ${socket.id}`);
+    socket.to(roomName).emit("user-joined-call", { socketId: socket.id });
   });
 
   socket.on("webrtc-offer", ({ toSocketId, offer }) => {
-    console.log(`Relaying offer from ${socket.id} to ${toSocketId}`);
+    console.log(`>>> Relaying offer from ${socket.id} to ${toSocketId}`);
     io.to(toSocketId).emit("webrtc-offer", {
       offer,
       fromSocketId: socket.id,
@@ -114,7 +129,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("webrtc-answer", ({ toSocketId, answer }) => {
-    console.log(`Relaying answer from ${socket.id} to ${toSocketId}`);
+    console.log(`>>> Relaying answer from ${socket.id} to ${toSocketId}`);
     io.to(toSocketId).emit("webrtc-answer", {
       answer,
       fromSocketId: socket.id,
@@ -122,6 +137,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("webrtc-candidate", ({ toSocketId, candidate }) => {
+    console.log(
+      `>>> Relaying ICE candidate from ${socket.id} to ${toSocketId}`
+    );
     io.to(toSocketId).emit("webrtc-candidate", {
       candidate,
       fromSocketId: socket.id,
@@ -129,7 +147,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("end-call", ({ chatId }) => {
-    console.log(`Call ended in room call-${chatId}`);
+    console.log(`Call ended in room call-${chatId} by ${socket.id}`);
     socket.to(`call-${chatId}`).emit("call-ended", {
       fromSocketId: socket.id,
     });

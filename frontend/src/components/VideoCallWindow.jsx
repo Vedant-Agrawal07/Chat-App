@@ -1,33 +1,41 @@
 import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff } from "lucide-react";
+import { ChatState } from "../Context/ChatProvider.jsx";
 
 const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
 
 export default function VideoCallWindow({ onClose, chatId, isCaller }) {
+  const { user } = ChatState();
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const socketRef = useRef(null);
   const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
 
-  const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [callStatus, setCallStatus] = useState("connecting");
+  const [callStatus, setCallStatus] = useState("initializing");
 
   useEffect(() => {
+    console.log("=== VideoCallWindow mounted ===");
+    console.log("Chat ID:", chatId);
+    console.log("Is Caller:", isCaller);
+    console.log("User:", user?.name);
+
     initializeCall();
 
     return () => {
+      console.log("=== VideoCallWindow unmounting ===");
       cleanup();
     };
   }, []);
 
   const initializeCall = async () => {
     try {
-      // Initialize socket
-      socketRef.current = io(ENDPOINT);
+      setCallStatus("getting media");
+      console.log("Getting user media...");
 
       // Get local media first
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -35,21 +43,32 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
         audio: true,
       });
 
-      setLocalStream(stream);
+      console.log("Got local stream:", stream.getTracks());
+      localStreamRef.current = stream;
+
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
 
-      // Setup socket listeners
-      setupSocketListeners();
+      // Initialize socket
+      setCallStatus("connecting socket");
+      socketRef.current = io(ENDPOINT);
 
-      // Join the call room
-      socketRef.current.emit("join-call-room", { chatId });
+      socketRef.current.on("connect", () => {
+        console.log("Socket connected:", socketRef.current.id);
 
-      setCallStatus("ready");
+        // Setup all socket listeners
+        setupSocketListeners();
+
+        // Join the call room
+        console.log("Joining call room:", chatId);
+        socketRef.current.emit("join-call-room", { chatId });
+
+        setCallStatus("waiting for peer");
+      });
     } catch (err) {
-      console.error("Error accessing media devices:", err);
-      alert("Could not access camera/microphone");
+      console.error("Error in initializeCall:", err);
+      alert("Could not access camera/microphone: " + err.message);
       onClose();
     }
   };
@@ -58,40 +77,66 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
     const socket = socketRef.current;
 
     // When another user joins the call
-    socket.on("user-joined-call", ({ userId, socketId }) => {
-      console.log("User joined call:", socketId);
+    socket.on("user-joined-call", ({ socketId }) => {
+      console.log(">>> User joined call! Socket ID:", socketId);
+      setCallStatus("user joined");
+
+      // Create peer connection
+      createPeerConnection(socketId);
+
       // If we're the caller, initiate the offer
       if (isCaller) {
-        createPeerConnection(socketId);
-        makeOffer(socketId);
+        console.log("I'm the caller, creating offer...");
+        setTimeout(() => makeOffer(socketId), 1000); // Small delay to ensure PC is ready
+      } else {
+        console.log("I'm the callee, waiting for offer...");
       }
     });
 
     // Receive offer from caller
     socket.on("webrtc-offer", async ({ offer, fromSocketId }) => {
-      console.log("Received offer from:", fromSocketId);
-      createPeerConnection(fromSocketId);
+      console.log(">>> Received offer from:", fromSocketId);
+      console.log("Offer SDP:", offer);
+
+      if (!peerConnectionRef.current) {
+        console.log("No peer connection exists, creating one...");
+        createPeerConnection(fromSocketId);
+        // Wait a bit for PC to be ready
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       await handleOffer(offer, fromSocketId);
     });
 
     // Receive answer from callee
     socket.on("webrtc-answer", async ({ answer, fromSocketId }) => {
-      console.log("Received answer from:", fromSocketId);
+      console.log(">>> Received answer from:", fromSocketId);
+      console.log("Answer SDP:", answer);
+
       if (peerConnectionRef.current) {
-        await peerConnectionRef.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
+        try {
+          await peerConnectionRef.current.setRemoteDescription(
+            new RTCSessionDescription(answer)
+          );
+          console.log("✓ Remote description set successfully");
+        } catch (err) {
+          console.error("Error setting remote description:", err);
+        }
+      } else {
+        console.error("No peer connection to set remote description!");
       }
     });
 
     // Receive ICE candidate
     socket.on("webrtc-candidate", async ({ candidate, fromSocketId }) => {
-      console.log("Received ICE candidate from:", fromSocketId);
+      console.log(">>> Received ICE candidate from:", fromSocketId);
+
       if (peerConnectionRef.current && candidate) {
         try {
           await peerConnectionRef.current.addIceCandidate(
             new RTCIceCandidate(candidate)
           );
+          console.log("✓ ICE candidate added");
         } catch (err) {
           console.error("Error adding ICE candidate:", err);
         }
@@ -100,14 +145,14 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
 
     // Call ended by other user
     socket.on("call-ended", ({ fromSocketId }) => {
-      console.log("Call ended by:", fromSocketId);
+      console.log(">>> Call ended by:", fromSocketId);
       cleanup();
       onClose();
     });
   };
 
   const createPeerConnection = (remoteSocketId) => {
-    console.log("Creating peer connection for:", remoteSocketId);
+    console.log("=== Creating peer connection for:", remoteSocketId, "===");
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -117,26 +162,39 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
     });
 
     // Add local stream tracks to peer connection
-    if (localStream) {
-      localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, localStream);
+    if (localStreamRef.current) {
+      console.log("Adding local tracks to peer connection...");
+      localStreamRef.current.getTracks().forEach((track) => {
+        console.log("Adding track:", track.kind, track.label);
+        pc.addTrack(track, localStreamRef.current);
       });
+    } else {
+      console.error("No local stream to add!");
     }
 
     // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log("Received remote track:", event.streams[0]);
-      setRemoteStream(event.streams[0]);
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+      console.log(">>> ON TRACK EVENT! Received remote track");
+      console.log("Track kind:", event.track.kind);
+      console.log("Streams:", event.streams);
+
+      if (event.streams && event.streams[0]) {
+        console.log("Setting remote stream...");
+        setRemoteStream(event.streams[0]);
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+          console.log("✓ Remote video element updated");
+        }
+
+        setCallStatus("connected");
       }
-      setCallStatus("connected");
     };
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log("Sending ICE candidate to:", remoteSocketId);
+        console.log(">>> Sending ICE candidate to:", remoteSocketId);
         socketRef.current.emit("webrtc-candidate", {
           toSocketId: remoteSocketId,
           candidate: event.candidate,
@@ -146,57 +204,94 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log("Connection state:", pc.connectionState);
+      console.log(">>> Connection state:", pc.connectionState);
+      setCallStatus(pc.connectionState);
+
       if (pc.connectionState === "connected") {
-        setCallStatus("connected");
+        console.log("✓✓✓ PEER CONNECTION ESTABLISHED! ✓✓✓");
       } else if (
         pc.connectionState === "disconnected" ||
         pc.connectionState === "failed"
       ) {
-        setCallStatus("disconnected");
+        console.log("Connection lost or failed");
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log(">>> ICE connection state:", pc.iceConnectionState);
+    };
+
     peerConnectionRef.current = pc;
+    console.log("✓ Peer connection created");
   };
 
   const makeOffer = async (remoteSocketId) => {
+    console.log("=== Making offer to:", remoteSocketId, "===");
+
     try {
       const pc = peerConnectionRef.current;
-      const offer = await pc.createOffer();
+
+      if (!pc) {
+        console.error("No peer connection available!");
+        return;
+      }
+
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+
+      console.log("Offer created:", offer);
       await pc.setLocalDescription(offer);
+      console.log("✓ Local description set");
 
       console.log("Sending offer to:", remoteSocketId);
       socketRef.current.emit("webrtc-offer", {
         toSocketId: remoteSocketId,
         offer: offer,
       });
+      console.log("✓ Offer sent");
     } catch (err) {
       console.error("Error making offer:", err);
     }
   };
 
   const handleOffer = async (offer, fromSocketId) => {
+    console.log("=== Handling offer from:", fromSocketId, "===");
+
     try {
       const pc = peerConnectionRef.current;
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
+      if (!pc) {
+        console.error("No peer connection available!");
+        return;
+      }
+
+      console.log("Setting remote description...");
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log("✓ Remote description set");
+
+      console.log("Creating answer...");
       const answer = await pc.createAnswer();
+      console.log("Answer created:", answer);
+
       await pc.setLocalDescription(answer);
+      console.log("✓ Local description set");
 
       console.log("Sending answer to:", fromSocketId);
       socketRef.current.emit("webrtc-answer", {
         toSocketId: fromSocketId,
         answer: answer,
       });
+      console.log("✓ Answer sent");
     } catch (err) {
       console.error("Error handling offer:", err);
     }
   };
 
   const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoEnabled;
         setVideoEnabled(!videoEnabled);
@@ -205,8 +300,8 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
   };
 
   const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioEnabled;
         setAudioEnabled(!audioEnabled);
@@ -215,6 +310,7 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
   };
 
   const endCall = () => {
+    console.log("Ending call...");
     // Notify other user
     socketRef.current?.emit("end-call", { chatId });
     cleanup();
@@ -222,6 +318,8 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
   };
 
   const cleanup = () => {
+    console.log("Cleaning up...");
+
     // Close peer connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
@@ -229,8 +327,12 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
     }
 
     // Stop all local tracks
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        console.log("Stopped track:", track.kind);
+      });
+      localStreamRef.current = null;
     }
 
     // Disconnect socket
@@ -243,8 +345,12 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black">
       {/* Status indicator */}
-      <div className="absolute top-4 left-4 text-white text-sm">
+      <div className="absolute top-4 left-4 text-white text-sm bg-black/50 px-3 py-2 rounded">
         Status: {callStatus}
+        <br />
+        Role: {isCaller ? "Caller" : "Callee"}
+        <br />
+        Remote: {remoteStream ? "Connected ✓" : "Waiting..."}
       </div>
 
       {/* Videos */}
@@ -258,8 +364,12 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
             className="w-full h-full object-cover"
           />
           {!remoteStream && (
-            <div className="absolute inset-0 flex items-center justify-center text-white">
-              Waiting for other participant...
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">
+              <div className="animate-pulse text-6xl">📹</div>
+              <div>Waiting for other participant...</div>
+              <div className="text-sm text-gray-400">
+                Check browser console for details
+              </div>
             </div>
           )}
         </div>
@@ -273,6 +383,9 @@ export default function VideoCallWindow({ onClose, chatId, isCaller }) {
             playsInline
             className="w-full h-full object-cover"
           />
+          <div className="absolute bottom-2 left-2 text-white text-xs bg-black/50 px-2 py-1 rounded">
+            You
+          </div>
         </div>
       </div>
 
