@@ -83,9 +83,9 @@ io.on("connection", (socket) => {
   });
 
   // --- VIDEO CALL / WEBRTC EVENTS ---
-  socket.on("call-user", ({ to, from }) => {
-    // Notify the callee that someone is calling
-    socket.to(to).emit("incoming-call", { from });
+  socket.on("call-user", ({ chatId, from }) => {
+    // Emit incoming call to everyone in the chat room except the caller
+    socket.to(chatId).emit("incoming-call", { from });
   });
 
   socket.on("accept-call", ({ to, answer }) => {

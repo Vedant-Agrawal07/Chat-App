@@ -22,28 +22,63 @@ import io from "socket.io-client";
 import Lottie from "react-lottie";
 import typingAnimation from "../animation/typingAnimation.json";
 
-  const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
 
 let socket, selectedChatCompare;
 
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const { user, SelectedChat, setSelectedChat, notification, setNotification } =
     ChatState();
-  const getSingleChatUserName = () => {
-    const userName = getSender(user, SelectedChat.users);
-    return userName;
-  };
+
+  const getSingleChatUserName = () => getSender(user, SelectedChat.users);
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
   const [typingIndicator, setTypingIndicator] = useState(false);
-  const toast = useToast();
   const [showCall, setShowCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
 
+  const toast = useToast();
 
+  // --- Socket Setup ---
+  useEffect(() => {
+    socket = io(ENDPOINT);
+    socket.emit("setup", user);
+
+    socket.on("connected", () => setSocketConnected(true));
+
+    socket.on("receive-message", (message) => {
+      if (
+        !selectedChatCompare ||
+        selectedChatCompare._id !== message.chat._id
+      ) {
+        if (!notification.some((notif) => notif._id === message._id)) {
+          setNotification((prev) => [message, ...prev]);
+          setFetchAgain(!fetchAgain);
+        }
+      } else {
+        setMessages((prev) => {
+          if (!prev.some((msg) => msg._id === message._id))
+            return [...prev, message];
+          return prev;
+        });
+      }
+    });
+
+    socket.on("incoming-call", ({ from }) => setIncomingCall(from));
+
+    socket.on("updateRemovedUser", () => setFetchAgain(!fetchAgain));
+
+    return () => {
+      socket.off("receive-message");
+      socket.off("incoming-call");
+      socket.off("updateRemovedUser");
+    };
+  }, []);
+
+  // --- Send message ---
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
       setLoading(true);
@@ -54,141 +89,62 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             authorization: `Bearer ${user.token}`,
           },
         };
-
-        setNewMessage("");
         const { data } = await axios.post(
           `${ENDPOINT}/api/message`,
-          {
-            message: newMessage,
-            chatId: SelectedChat._id,
-          },
+          { message: newMessage, chatId: SelectedChat._id },
           config
         );
-        console.log(data);
-        setLoading(false);
-        // setMessages([...messages, data]);
-        setMessages((prevMessages) => [...prevMessages, data]);
+
+        setNewMessage("");
+        setMessages((prev) => [...prev, data]);
         socket.emit("send-message", data, SelectedChat._id);
-        return;
+        setLoading(false);
       } catch (error) {
         toast({
-          title: "error occured",
+          title: "Error occurred",
           description: error.message,
           status: "error",
           duration: 5000,
           isClosable: true,
           position: "bottom",
         });
-
         setLoading(false);
-        return;
       }
     }
   };
 
-  useEffect(() => {
-    socket = io(ENDPOINT);
-    socket.emit("setup", user);
-    socket.on("connected", () => {
-      console.log(`connection succesfull`);
-      setSocketConnected(true);
-    });
-    socket.on("receive-message", (message) => {
-      if (
-        !selectedChatCompare ||
-        selectedChatCompare._id !== message.chat._id
-      ) {
-        if (!notification.some((notif) => notif._id === message._id)) {
-          setNotification((prevNotification) => [message, ...prevNotification]);
-          setFetchAgain(!fetchAgain);
-        }
-      } else {
-        setMessages((prevMessages) => {
-          if (!prevMessages.some((msg) => msg._id === message._id)) {
-            setFetchAgain(!fetchAgain);
-            return [...prevMessages, message];
-          }
-          setFetchAgain(!fetchAgain);
-          return prevMessages;
-        });
-      }
-    });
-
-    return () => {
-      socket.off("receive-message");
-    };
-  }, []);
-
-  useEffect(() => {
-    socket.on("updateRemovedUser", () => {
-      setFetchAgain(!fetchAgain);
-    });
-    return () => socket.off("updateRemovedUser");
-  }, []);
-
+  // --- Typing indicator ---
   const typingHandler = (e) => {
-    let value = e.target.value;
+    const value = e.target.value;
     setNewMessage(value);
 
-    // typing indicator logic
-
-    if (value === "") {
-      socket.emit("typingIndicate", false, SelectedChat._id);
-    }else{
-       socket.emit("typingIndicate", true, SelectedChat._id);
-    }
+    if (value === "") socket.emit("typingIndicate", false, SelectedChat._id);
+    else socket.emit("typingIndicate", true, SelectedChat._id);
   };
 
-  // useEffect(() => {
-  //    if (!socket) {
-  //      return;
-  //    }
-  //   socket.emit("typingIndicate", true, SelectedChat._id);
-  //   return () => socket.off("typingIndicate");
-  // }, []);
-
-  useEffect(() => {
-    if (!socket) {
-      return;
-    }
-    socket.on("indicator", (indicator) => {
-      setTypingIndicator(indicator);
-    });
-    return () => socket.off("indicator");
-  }, []);
-
+  // --- Load messages ---
   const displayAllMessages = async () => {
     if (!SelectedChat) return;
     setLoading(true);
-    const config = {
-      headers: {
-        authorization: `Bearer ${user.token}`,
-      },
-    };
     try {
+      const config = { headers: { authorization: `Bearer ${user.token}` } };
       const { data } = await axios.get(
         `${ENDPOINT}/api/message/${SelectedChat._id}`,
         config
       );
-      console.log(data);
       setMessages(data);
-      setLoading(false);
-
       socket.emit("joinChat", SelectedChat._id);
-
-      return;
+      setLoading(false);
     } catch (error) {
       toast({
-        title: "error occured",
+        title: "Error occurred",
         description: error.message,
         status: "error",
         duration: 5000,
         isClosable: true,
         position: "bottom",
       });
-
       setLoading(false);
-      return;
     }
   };
 
@@ -197,48 +153,45 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     selectedChatCompare = SelectedChat;
   }, [SelectedChat]);
 
-  useEffect(() => {
-    socket.on("incoming-call", ({ from }) => {
-      setIncomingCall(from);
-    });
-
-    return () => socket.off("incoming-call");
-  }, []);
-
-
   const defaultOptions = {
     loop: true,
     autoplay: true,
     animationData: typingAnimation,
-    rendererSettings: {
-      preserveAspectRatio: "xMidYMid slice",
-    },
+    rendererSettings: { preserveAspectRatio: "xMidYMid slice" },
+  };
+
+  // --- Call Button Handler ---
+  const handleVideoCall = () => {
+    if (!SelectedChat) return;
+    // Emit to server to notify others in the chat
+    socket.emit("call-user", { chatId: SelectedChat._id, from: user.name });
+    setShowCall(true);
   };
 
   return (
     <>
       {SelectedChat ? (
         <>
+          {/* Chat Header */}
           <Text
             fontSize={{ base: "27px", md: "30px" }}
             pb={3}
             px={2}
-            w={"100%"}
-            fontFamily={"Work sans"}
-            display={"flex"}
-            justifyContent={{ base: "space-between" }}
-            alignItems={"center"}
+            w="100%"
+            fontFamily="Work sans"
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
           >
             <IconButton
               display={{ base: "flex", md: "none" }}
               icon={<ArrowBackIcon />}
               onClick={() => setSelectedChat("")}
             />
-
             {SelectedChat.chatName === "sender" ? (
               <>
                 {getSingleChatUserName()}
-                <ProfileModal user={user}></ProfileModal>
+                <ProfileModal user={user} />
               </>
             ) : (
               <>
@@ -255,99 +208,97 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             <IconButton
               aria-label="Video Call"
               icon={<Video />}
-              onClick={() => setShowCall(true)}
+              onClick={handleVideoCall}
             />
           </Text>
+
+          {/* Messages */}
           <Box
-            display={"flex"}
-            flexDir={"column"}
-            justifyContent={"flex-end"}
+            display="flex"
+            flexDir="column"
+            justifyContent="flex-end"
             p={3}
-            bg={"#E8E8E8"}
-            w={"100%"}
-            h={"100%"}
-            borderRadius={"1g"}
-            overflowY={"hidden"}
+            bg="#E8E8E8"
+            w="100%"
+            h="100%"
+            borderRadius="1g"
+            overflowY="hidden"
           >
             {loading ? (
-              <>
-                <Spinner
-                  size={"xl"}
-                  w={20}
-                  h={20}
-                  alignSelf={"center"}
-                  margin={"auto"}
-                />
-              </>
+              <Spinner
+                size="xl"
+                w={20}
+                h={20}
+                alignSelf="center"
+                margin="auto"
+              />
             ) : (
               <>
                 <div
                   className="messages"
                   style={{ height: "100%", overflowY: "auto" }}
                 >
-                  <ScrollableChat messages={messages}></ScrollableChat>
+                  <ScrollableChat messages={messages} />
                 </div>
-                {typingIndicator ? (
-                  <>
-                    <div
+                {typingIndicator && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-start",
+                      height: "40px",
+                      width: "40px",
+                    }}
+                  >
+                    <Lottie
                       style={{
-                        display: "flex",
-                        justifyContent: "flex-start",
-                        height: "40px",
-                        width: "40px",
+                        borderRadius: "10px",
+                        marginTop: "7px",
+                        opacity: "70%",
                       }}
-                    >
-                      <Lottie
-                        style={{
-                          borderRadius: "10px",
-                          marginTop: "7px",
-                          opacity: "70%",
-                        }}
-                        options={defaultOptions}
-                        height={40}
-                        width={40}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <></>
+                      options={defaultOptions}
+                      height={40}
+                      width={40}
+                    />
+                  </div>
                 )}
               </>
             )}
             <FormControl onKeyDown={sendMessage} isRequired mt={3}>
               <Input
-                variant={"filled"}
-                bg={"#E0E0E0"}
+                variant="filled"
+                bg="#E0E0E0"
                 placeholder="Enter a Message ..."
-                onChange={(e) => typingHandler(e)}
+                onChange={typingHandler}
                 value={newMessage}
-              ></Input>
+              />
             </FormControl>
           </Box>
         </>
       ) : (
         <Box
-          display={"flex"}
-          alignItems={"center"}
-          justifyContent={"center"}
-          h={"100%"}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          h="100%"
         >
-          <Text fontSize={"3xl"} pb={3} fontFamily={"Work sans"}>
+          <Text fontSize="3xl" pb={3} fontFamily="Work sans">
             Click on a user to start chatting
           </Text>
         </Box>
       )}
+
+      {/* Incoming Call Modal */}
       {incomingCall && (
         <div
           style={{
             position: "fixed",
-            top: "20px", // distance from top
+            top: "20px",
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 9999,
-            width: "90%", // or maxWidth: "400px"
+            width: "90%",
             maxWidth: "400px",
-            backgroundColor: "#25D366", // WhatsApp green
+            backgroundColor: "#25D366",
             borderRadius: "10px",
             boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
             padding: "10px",
@@ -364,27 +315,12 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         </div>
       )}
 
+      {/* Video Call Window */}
       {showCall && (
-        <div
-          // style={{
-          //   position: "fixed",
-          //   top: "20px",
-          //   left: "50%",
-          //   transform: "translateX(-50%)",
-          //   zIndex: 9999,
-          //   width: "90%",
-          //   maxWidth: "600px",
-          //   backgroundColor: "#25D366",
-          //   borderRadius: "10px",
-          //   boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-          //   padding: "10px",
-          // }}
-        >
-          <VideoCallWindow
-            onClose={() => setShowCall(false)}
-            chatId={SelectedChat?._id}
-          />
-        </div>
+        <VideoCallWindow
+          onClose={() => setShowCall(false)}
+          chatId={SelectedChat?._id}
+        />
       )}
     </>
   );
