@@ -30,6 +30,22 @@ export default function IncomingCallModal({
   onReject,
   className = "",
 }) {
+  // Handle both string and object caller data
+  const callerName =
+    typeof caller === "string"
+      ? caller
+      : caller?.name || caller?.email || "Unknown Caller";
+
+  // Get initials from the caller name
+  const getInitials = (name) => {
+    if (!name) return "??";
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
   return (
     <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm text-white ${className}`}
@@ -54,7 +70,7 @@ export default function IncomingCallModal({
                 <Video className="h-4 w-4" />
               </span>
             </span>
-            {caller.slice(0, 2).toUpperCase()}
+            {getInitials(callerName)}
           </div>
 
           {/* Call info */}
@@ -62,7 +78,7 @@ export default function IncomingCallModal({
             <p className="text-xs uppercase tracking-[0.4em] text-white/60">
               Incoming call
             </p>
-            <h2 className="text-4xl font-semibold text-white">{caller}</h2>
+            <h2 className="text-4xl font-semibold text-white">{callerName}</h2>
             <p className="text-sm text-white/70">
               {subtitle || "is inviting you to join a video call session."}
             </p>

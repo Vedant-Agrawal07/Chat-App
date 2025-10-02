@@ -39,6 +39,8 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [typingIndicator, setTypingIndicator] = useState(false);
   const [showCall, setShowCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [isCallInitiator, setIsCallInitiator] = useState(false);
+
 
   const toast = useToast();
 
@@ -67,8 +69,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       }
     });
 
-    socket.on("incoming-call", ({ from }) => setIncomingCall(from));
-
+socket.on("incoming-call", ({ from }) => {
+  setIncomingCall(from);
+  setIsCallInitiator(false); // Not the initiator
+});
     socket.on("updateRemovedUser", () => setFetchAgain(!fetchAgain));
 
     return () => {
@@ -164,6 +168,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 const handleVideoCall = () => {
   if (!SelectedChat) return;
   socket.emit("call-user", { chatId: SelectedChat._id, from: user });
+  setIsCallInitiator(true); // Mark as initiator
   setShowCall(true);
 };
 
@@ -289,21 +294,28 @@ const handleVideoCall = () => {
       {/* Incoming Call Modal */}
       {incomingCall && (
         <IncomingCallModal
-          caller={incomingCall}
+          caller={incomingCall} // This will now work with both string and object
           onAccept={() => {
             setShowCall(true);
             setIncomingCall(null);
           }}
-          onReject={() => setIncomingCall(null)}
+          onReject={() => {
+            setIncomingCall(null);
+            // Optionally notify the caller that call was rejected
+            socket.emit("call-rejected", { chatId: SelectedChat._id });
+          }}
         />
       )}
 
       {/* Video Call Window */}
       {showCall && (
         <VideoCallWindow
-          onClose={() => setShowCall(false)}
+          onClose={() => {
+            setShowCall(false);
+            setIsCallInitiator(false);
+          }}
           chatId={SelectedChat?._id}
-          isCaller={true} // Add this prop
+          isCaller={isCallInitiator}
         />
       )}
     </>
