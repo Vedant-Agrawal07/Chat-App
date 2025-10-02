@@ -161,12 +161,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   };
 
   // --- Call Button Handler ---
-  const handleVideoCall = () => {
-    if (!SelectedChat) return;
-    // Emit to server to notify others in the chat
-    socket.emit("call-user", { chatId: SelectedChat._id, from: user.name });
-    setShowCall(true);
-  };
+const handleVideoCall = () => {
+  if (!SelectedChat) return;
+  socket.emit("call-user", { chatId: SelectedChat._id, from: user });
+  setShowCall(true);
+};
 
   return (
     <>
@@ -304,6 +303,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         <VideoCallWindow
           onClose={() => setShowCall(false)}
           chatId={SelectedChat?._id}
+          isCaller={true} // Add this prop
         />
       )}
     </>

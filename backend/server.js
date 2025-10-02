@@ -91,23 +91,47 @@ io.on("connection", (socket) => {
 
   // --- VIDEO CALL / WEBRTC EVENTS ---
   socket.on("call-user", ({ chatId, from }) => {
-    // send to everyone in the chat room except sender
+    console.log(`Call initiated in chat ${chatId} by ${from.name}`);
     socket.to(chatId).emit("incoming-call", { from });
   });
 
-  socket.on("webrtc-offer", ({ to, offer }) => {
-    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
+  socket.on("join-call-room", ({ chatId }) => {
+    socket.join(`call-${chatId}`);
+    console.log(`Socket ${socket.id} joined call room: call-${chatId}`);
+
+    // Notify others in the call room that someone joined
+    socket.to(`call-${chatId}`).emit("user-joined-call", {
+      socketId: socket.id,
+    });
   });
 
-  socket.on("webrtc-answer", ({ to, answer }) => {
-    socket.to(to).emit("webrtc-answer", { answer });
+  socket.on("webrtc-offer", ({ toSocketId, offer }) => {
+    console.log(`Relaying offer from ${socket.id} to ${toSocketId}`);
+    io.to(toSocketId).emit("webrtc-offer", {
+      offer,
+      fromSocketId: socket.id,
+    });
   });
 
-  socket.on("webrtc-candidate", ({ to, candidate }) => {
-    socket.to(to).emit("webrtc-candidate", { candidate });
+  socket.on("webrtc-answer", ({ toSocketId, answer }) => {
+    console.log(`Relaying answer from ${socket.id} to ${toSocketId}`);
+    io.to(toSocketId).emit("webrtc-answer", {
+      answer,
+      fromSocketId: socket.id,
+    });
   });
 
- socket.on("end-call", ({ toSocketId }) => {
-   io.to(toSocketId).emit("call-ended");
- });
+  socket.on("webrtc-candidate", ({ toSocketId, candidate }) => {
+    io.to(toSocketId).emit("webrtc-candidate", {
+      candidate,
+      fromSocketId: socket.id,
+    });
+  });
+
+  socket.on("end-call", ({ chatId }) => {
+    console.log(`Call ended in room call-${chatId}`);
+    socket.to(`call-${chatId}`).emit("call-ended", {
+      fromSocketId: socket.id,
+    });
+  });
 });
