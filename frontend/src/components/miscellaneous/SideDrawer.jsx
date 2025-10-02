@@ -37,6 +37,8 @@ import NotificationBadge from "react-notification-badge";
 import { Effect } from "react-notification-badge";
 
 const SideDrawer = () => {
+    const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+
   const [search, setSearch] = useState("");
   const [searchResult, setsearchResult] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -83,7 +85,7 @@ const SideDrawer = () => {
       };
 
       const { data } = await axios.get(
-        `https://echo-chat-app-f5jz.onrender.com/api/user?search=${search}`,
+        `${ENDPOINT}/api/user?search=${search}`,
         config
       );
       console.log(data);
@@ -114,7 +116,7 @@ const SideDrawer = () => {
       };
 
       const { data } = await axios.post(
-        "https://echo-chat-app-f5jz.onrender.com/api/chat",
+        `${ENDPOINT}/api/chat`,
         {
           userId: userId,
         },

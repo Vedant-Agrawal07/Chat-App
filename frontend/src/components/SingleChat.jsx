@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { Video } from "lucide-react";
+import VideoCallWindow from "./VideoCallWindow.jsx";
+import IncomingCallModal from "./IncomingCallModal.jsx";
 import { ChatState } from "../Context/ChatProvider.jsx";
 import {
   Box,
@@ -19,7 +22,7 @@ import io from "socket.io-client";
 import Lottie from "react-lottie";
 import typingAnimation from "../animation/typingAnimation.json";
 
-const ENDPOINT = "https://echo-chat-app-f5jz.onrender.com";
+  const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
 
 let socket, selectedChatCompare;
 
@@ -37,6 +40,9 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [typingIndicator, setTypingIndicator] = useState(false);
   const toast = useToast();
+  const [showCall, setShowCall] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+
 
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
@@ -51,7 +57,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 
         setNewMessage("");
         const { data } = await axios.post(
-          "https://echo-chat-app-f5jz.onrender.com/api/message",
+          `${ENDPOINT}/api/message`,
           {
             message: newMessage,
             chatId: SelectedChat._id,
@@ -161,7 +167,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     };
     try {
       const { data } = await axios.get(
-        `https://echo-chat-app-f5jz.onrender.com/api/message/${SelectedChat._id}`,
+        `${ENDPOINT}/api/message/${SelectedChat._id}`,
         config
       );
       console.log(data);
@@ -190,6 +196,15 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     displayAllMessages();
     selectedChatCompare = SelectedChat;
   }, [SelectedChat]);
+
+  useEffect(() => {
+    socket.on("incoming-call", ({ from }) => {
+      setIncomingCall(from);
+    });
+
+    return () => socket.off("incoming-call");
+  }, []);
+
 
   const defaultOptions = {
     loop: true,
@@ -237,6 +252,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 </UpdateGroupChatModal>
               </>
             )}
+            <IconButton
+              aria-label="Video Call"
+              icon={<Video />}
+              onClick={() => setShowCall(true)}
+            />
           </Text>
           <Box
             display={"flex"}
@@ -270,9 +290,23 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 {typingIndicator ? (
                   <>
                     <div
-                      style={{ display: "flex", justifyContent: "flex-start" , height:"40px",  width:"40px"}}
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-start",
+                        height: "40px",
+                        width: "40px",
+                      }}
                     >
-                      <Lottie style={{borderRadius:"10px" , marginTop:"7px" , opacity:"70%"}} options={defaultOptions} height={40} width={40} />
+                      <Lottie
+                        style={{
+                          borderRadius: "10px",
+                          marginTop: "7px",
+                          opacity: "70%",
+                        }}
+                        options={defaultOptions}
+                        height={40}
+                        width={40}
+                      />
                     </div>
                   </>
                 ) : (
@@ -302,6 +336,55 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             Click on a user to start chatting
           </Text>
         </Box>
+      )}
+      {incomingCall && (
+        <div
+          style={{
+            position: "fixed",
+            top: "20px", // distance from top
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            width: "90%", // or maxWidth: "400px"
+            maxWidth: "400px",
+            backgroundColor: "#25D366", // WhatsApp green
+            borderRadius: "10px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            padding: "10px",
+          }}
+        >
+          <IncomingCallModal
+            caller={incomingCall}
+            onAccept={() => {
+              setShowCall(true);
+              setIncomingCall(null);
+            }}
+            onReject={() => setIncomingCall(null)}
+          />
+        </div>
+      )}
+
+      {showCall && (
+        <div
+          // style={{
+          //   position: "fixed",
+          //   top: "20px",
+          //   left: "50%",
+          //   transform: "translateX(-50%)",
+          //   zIndex: 9999,
+          //   width: "90%",
+          //   maxWidth: "600px",
+          //   backgroundColor: "#25D366",
+          //   borderRadius: "10px",
+          //   boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          //   padding: "10px",
+          // }}
+        >
+          <VideoCallWindow
+            onClose={() => setShowCall(false)}
+            chatId={SelectedChat?._id}
+          />
+        </div>
       )}
     </>
   );

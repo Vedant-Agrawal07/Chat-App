@@ -12,6 +12,8 @@ import GroupChatModal from "./GroupChatModal.jsx";
   };
 
 const MyChats = ({ fetchAgain }) => {
+  const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+
   const { user, SelectedChat, setSelectedChat, chats, setChats } = ChatState();
   const [loggedUser, setLoggedUser] = useState();
   const toast = useToast();
@@ -25,7 +27,7 @@ const MyChats = ({ fetchAgain }) => {
       };
 
       const { data } = await axios.get(
-        "https://echo-chat-app-f5jz.onrender.com/api/chat",
+        `${ENDPOINT}/api/chat`,
         config
       );
       console.log(data);

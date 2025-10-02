@@ -11,6 +11,8 @@ import axios from "axios";
 import { useHistory } from "react-router-dom";
 
 const Signup = () => {
+  const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -104,7 +106,7 @@ const Signup = () => {
       };
 
       const { data } = await axios.post(
-        "https://echo-chat-app-f5jz.onrender.com/api/user",
+        `${ENDPOINT}/api/user`,
         { name, email, password, pic },
         config
       );

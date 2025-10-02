@@ -30,6 +30,8 @@ const UpdateGroupChatModal = ({
   displayAllMessages,
   children,
 }) => {
+    const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+
   const { user, SelectedChat, setSelectedChat, chats, setChats } = ChatState();
   const [newChatName, setNewChatName] = useState("");
   const [search, setSearch] = useState("");
@@ -51,7 +53,7 @@ const UpdateGroupChatModal = ({
         },
       };
       const { data } = await axios.get(
-        `https://echo-chat-app-f5jz.onrender.com/api/user?search=${search}`,
+        `${ENDPOINT}/api/user?search=${search}`,
         config
       );
       console.log(data);
@@ -99,7 +101,7 @@ const UpdateGroupChatModal = ({
 
         try {
           const { data } = await axios.put(
-            "https://echo-chat-app-f5jz.onrender.com/api/chat/groupadd",
+            `${ENDPOINT}/api/chat/groupadd`,
             { chatId: SelectedChat._id, userId: member._id },
             config
           );
@@ -160,7 +162,7 @@ const UpdateGroupChatModal = ({
       };
       try {
         const { data } = await axios.put(
-          "https://echo-chat-app-f5jz.onrender.com/api/chat/groupremove",
+          `${ENDPOINT}/api/chat/groupremove`,
           { chatId: SelectedChat._id, userId: member._id },
           config
         );
@@ -207,7 +209,7 @@ const UpdateGroupChatModal = ({
     };
     try {
       const { data } = await axios.put(
-        "https://echo-chat-app-f5jz.onrender.com/api/chat/groupremove",
+        `${ENDPOINT}/api/chat/groupremove`,
         { chatId: SelectedChat._id, userId: user._id },
         config
       );
@@ -256,7 +258,7 @@ const UpdateGroupChatModal = ({
       };
       try {
         const { data } = await axios.put(
-          "https://echo-chat-app-f5jz.onrender.com/api/chat/rename",
+          `${ENDPOINT}/api/chat/rename`,
           { chatId: SelectedChat._id, name: newChatName },
           config
         );

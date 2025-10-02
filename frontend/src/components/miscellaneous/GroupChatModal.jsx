@@ -23,6 +23,8 @@ import GroupMembers from "./GroupMembers.jsx";
 import UserListItem from "../userAvatar/UserListItem.jsx";
 
 const GroupChatModal = ({ children }) => {
+  const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [groupChatName, setGroupChatName] = useState("");
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -41,7 +43,7 @@ const GroupChatModal = ({ children }) => {
         },
       };
       const { data } = await axios.get(
-        `https://echo-chat-app-f5jz.onrender.com/api/user?search=${search}`,
+        `${ENDPOINT}/api/user?search=${search}`,
         config
       );
       console.log(data);
@@ -131,7 +133,7 @@ const GroupChatModal = ({ children }) => {
       }
 
       const { data } = await axios.post(
-        "https://echo-chat-app-f5jz.onrender.com/api/chat/group",
+        `${ENDPOINT}/api/chat/group`,
         {
           name: groupChatName,
           users: JSON.stringify(selectedUsersId),

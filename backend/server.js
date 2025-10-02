@@ -14,7 +14,7 @@ import cors from "cors";
 const app = express();
 app.use(
   cors({
-    origin: "https://chat-app-b4cc.vercel.app",
+    origin: ["https://chat-app-b4cc.vercel.app", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -22,7 +22,7 @@ app.use(
 );
 
 app.options("*", cors());
-app.use(express.json()); // to accept json data
+app.use(express.json()); 
 
 dotenv.config();
 connectDB();
@@ -48,7 +48,7 @@ server.listen(PORT, () => {
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "https://chat-app-b4cc.vercel.app",
+    origin: ["https://chat-app-b4cc.vercel.app", "http://localhost:5173"],
   },
 });
 
@@ -80,5 +80,36 @@ io.on("connection", (socket) => {
 
   socket.on("typingIndicate", (indicator, chatId) => {
     socket.to(chatId).emit("indicator", indicator);
+  });
+
+  // --- VIDEO CALL / WEBRTC EVENTS ---
+  socket.on("call-user", ({ to, from }) => {
+    // Notify the callee that someone is calling
+    socket.to(to).emit("incoming-call", { from });
+  });
+
+  socket.on("accept-call", ({ to, answer }) => {
+    // Send the SDP answer back to the caller
+    socket.to(to).emit("call-accepted", { answer });
+  });
+
+  socket.on("webrtc-offer", ({ to, offer }) => {
+    // Send the SDP offer to the callee
+    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
+  });
+
+  socket.on("webrtc-answer", ({ to, answer }) => {
+    // Send the SDP answer to the caller
+    socket.to(to).emit("webrtc-answer", { answer });
+  });
+
+  socket.on("webrtc-candidate", ({ to, candidate }) => {
+    // Exchange ICE candidates
+    socket.to(to).emit("webrtc-candidate", { candidate });
+  });
+
+  socket.on("end-call", ({ to }) => {
+    // Notify the other user the call ended
+    socket.to(to).emit("call-ended");
   });
 });
