@@ -29,6 +29,9 @@ let socket, selectedChatCompare;
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const { user, SelectedChat, setSelectedChat, notification, setNotification } =
     ChatState();
+
+  const getSingleChatUserName = () => getSender(user, SelectedChat.users);
+
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
@@ -39,6 +42,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 
   const toast = useToast();
 
+  // --- Socket Setup ---
   useEffect(() => {
     socket = io(ENDPOINT);
     socket.emit("setup", user);
@@ -55,22 +59,26 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
           setFetchAgain(!fetchAgain);
         }
       } else {
-        setMessages((prev) =>
-          !prev.some((msg) => msg._id === message._id)
-            ? [...prev, message]
-            : prev
-        );
+        setMessages((prev) => {
+          if (!prev.some((msg) => msg._id === message._id))
+            return [...prev, message];
+          return prev;
+        });
       }
     });
 
-    socket.on("incoming-call", ({ fromUserId }) => setIncomingCall(fromUserId));
+    socket.on("incoming-call", ({ from }) => setIncomingCall(from));
+
+    socket.on("updateRemovedUser", () => setFetchAgain(!fetchAgain));
 
     return () => {
       socket.off("receive-message");
       socket.off("incoming-call");
+      socket.off("updateRemovedUser");
     };
   }, []);
 
+  // --- Send message ---
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
       setLoading(true);
@@ -86,6 +94,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
           { message: newMessage, chatId: SelectedChat._id },
           config
         );
+
         setNewMessage("");
         setMessages((prev) => [...prev, data]);
         socket.emit("send-message", data, SelectedChat._id);
@@ -104,12 +113,16 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     }
   };
 
+  // --- Typing indicator ---
   const typingHandler = (e) => {
     const value = e.target.value;
     setNewMessage(value);
-    socket.emit("typingIndicate", value !== "", SelectedChat._id);
+
+    if (value === "") socket.emit("typingIndicate", false, SelectedChat._id);
+    else socket.emit("typingIndicate", true, SelectedChat._id);
   };
 
+  // --- Load messages ---
   const displayAllMessages = async () => {
     if (!SelectedChat) return;
     setLoading(true);
@@ -147,8 +160,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     rendererSettings: { preserveAspectRatio: "xMidYMid slice" },
   };
 
+  // --- Call Button Handler ---
   const handleVideoCall = () => {
     if (!SelectedChat) return;
+    // Emit to server to notify others in the chat
     socket.emit("call-user", { chatId: SelectedChat._id, from: user.name });
     setShowCall(true);
   };
@@ -157,6 +172,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     <>
       {SelectedChat ? (
         <>
+          {/* Chat Header */}
           <Text
             fontSize={{ base: "27px", md: "30px" }}
             pb={3}
@@ -174,7 +190,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             />
             {SelectedChat.chatName === "sender" ? (
               <>
-                {getSender(user, SelectedChat.users)}
+                {getSingleChatUserName()}
                 <ProfileModal user={user} />
               </>
             ) : (
@@ -196,6 +212,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             />
           </Text>
 
+          {/* Messages */}
           <Box
             display="flex"
             flexDir="column"
@@ -270,6 +287,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         </Box>
       )}
 
+      {/* Incoming Call Modal */}
       {incomingCall && (
         <IncomingCallModal
           caller={incomingCall}
@@ -281,6 +299,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         />
       )}
 
+      {/* Video Call Window */}
       {showCall && (
         <VideoCallWindow
           onClose={() => setShowCall(false)}
