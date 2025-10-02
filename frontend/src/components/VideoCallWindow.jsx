@@ -1,164 +1,135 @@
-import { useEffect, useRef, useState } from "react";
-import { Video, VideoOff, Mic, MicOff, PhoneOff } from "lucide-react";
-import { io } from "socket.io-client";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, IconButton } from "@chakra-ui/react";
+import { X } from "lucide-react";
+import { ChatState } from "../Context/ChatProvider.jsx";
+import io from "socket.io-client";
 
-const configuration = {
-  iceServers: [
-    {
-      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
-    },
-  ],
-};
+const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
+let socket;
 
-export default function VideoCallWindow({ onClose, chatId, socket }) {
-  const localVideo = useRef(null);
-  const remoteVideo = useRef(null);
-  const [localStream, setLocalStream] = useState(null);
-  const [videoEnabled, setVideoEnabled] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(true);
+export default function VideoCallWindow({ onClose, chatId, remoteSocketId }) {
+  const { user } = ChatState();
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
 
+  const [stream, setStream] = useState(null);
+
   useEffect(() => {
-    startCall();
+    socket = io(ENDPOINT);
 
-    return () => hangup();
-  }, []);
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then((mediaStream) => {
+        setStream(mediaStream);
+        if (localVideoRef.current)
+          localVideoRef.current.srcObject = mediaStream;
 
-  async function startCall() {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
-    setLocalStream(stream);
-    localVideo.current.srcObject = stream;
+        pcRef.current = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
 
-    const pc = new RTCPeerConnection(configuration);
-    pcRef.current = pc;
+        // Add local tracks to PeerConnection
+        mediaStream
+          .getTracks()
+          .forEach((track) => pcRef.current.addTrack(track, mediaStream));
 
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        // Handle remote stream
+        pcRef.current.ontrack = (event) => {
+          if (remoteVideoRef.current)
+            remoteVideoRef.current.srcObject = event.streams[0];
+        };
 
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("webrtc-candidate", { to: chatId, candidate: e.candidate });
-      }
-    };
+        // Send ICE candidates
+        pcRef.current.onicecandidate = (event) => {
+          if (event.candidate && remoteSocketId) {
+            socket.emit("webrtc-candidate", {
+              toSocketId: remoteSocketId,
+              candidate: event.candidate,
+            });
+          }
+        };
+      });
 
-    pc.ontrack = (e) => {
-      remoteVideo.current.srcObject = e.streams[0];
-    };
-
-    // Listen for signaling events
-    socket.on("webrtc-offer", async ({ offer, from }) => {
-      if (!pcRef.current) return;
+    // Listen for incoming WebRTC events
+    socket.on("webrtc-offer", async ({ offer, fromSocketId }) => {
       await pcRef.current.setRemoteDescription(
         new RTCSessionDescription(offer)
       );
       const answer = await pcRef.current.createAnswer();
       await pcRef.current.setLocalDescription(answer);
-      socket.emit("webrtc-answer", { to: from, answer });
+      socket.emit("webrtc-answer", { toSocketId: fromSocketId, answer });
     });
 
     socket.on("webrtc-answer", async ({ answer }) => {
-      if (!pcRef.current) return;
       await pcRef.current.setRemoteDescription(
         new RTCSessionDescription(answer)
       );
     });
 
     socket.on("webrtc-candidate", async ({ candidate }) => {
-      if (!pcRef.current) return;
-      await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      try {
+        await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.error(err);
+      }
     });
 
-    socket.on("call-ended", () => hangup());
+    socket.on("call-ended", () => {
+      cleanup();
+    });
 
-    // Initiate call (send offer)
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("webrtc-offer", { to: chatId, offer });
-  }
+    return () => cleanup();
+  }, []);
 
-  function toggleVideo() {
-    localStream
-      .getVideoTracks()
-      .forEach((track) => (track.enabled = !track.enabled));
-    setVideoEnabled(!videoEnabled);
-  }
-
-  function toggleAudio() {
-    localStream
-      .getAudioTracks()
-      .forEach((track) => (track.enabled = !track.enabled));
-    setAudioEnabled(!audioEnabled);
-  }
-
-  function hangup() {
+  const cleanup = () => {
     if (pcRef.current) pcRef.current.close();
-    localStream?.getTracks().forEach((t) => t.stop());
-    socket.emit("end-call", { to: chatId });
+    if (stream) stream.getTracks().forEach((track) => track.stop());
     onClose();
-  }
+  };
+
+  const handleEndCall = () => {
+    if (remoteSocketId) socket.emit("end-call", { toSocketId: remoteSocketId });
+    cleanup();
+  };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 flex items-center justify-center z-50">
-      <div className="w-full h-full flex flex-col p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 mb-4">
-          <div className="relative bg-slate-900/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/10 shadow-xl">
-            <video
-              ref={remoteVideo}
-              autoPlay
-              playsInline
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-4 left-4 bg-slate-900/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
-              <span className="text-white text-xs font-medium">Remote</span>
-            </div>
-          </div>
-          <div className="relative bg-slate-900/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/10 shadow-xl">
-            <video
-              ref={localVideo}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-4 left-4 bg-slate-900/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
-              <span className="text-white text-xs font-medium">You</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-center">
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl px-8 py-4 shadow-2xl flex gap-3">
-            <button
-              onClick={toggleVideo}
-              className={`p-4 rounded-xl ${
-                videoEnabled ? "bg-slate-800/50" : "bg-red-500/80"
-              }`}
-            >
-              {videoEnabled ? (
-                <Video className="w-5 h-5 text-white" />
-              ) : (
-                <VideoOff className="w-5 h-5 text-white" />
-              )}
-            </button>
-            <button
-              onClick={toggleAudio}
-              className={`p-4 rounded-xl ${
-                audioEnabled ? "bg-slate-800/50" : "bg-red-500/80"
-              }`}
-            >
-              {audioEnabled ? (
-                <Mic className="w-5 h-5 text-white" />
-              ) : (
-                <MicOff className="w-5 h-5 text-white" />
-              )}
-            </button>
-            <button onClick={hangup} className="p-4 rounded-xl bg-red-500/90">
-              <PhoneOff className="w-5 h-5 text-white" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Box
+      position="fixed"
+      top="10%"
+      left="10%"
+      w="80%"
+      h="80%"
+      bg="black"
+      zIndex={9999}
+      borderRadius="md"
+      overflow="hidden"
+    >
+      <video
+        ref={localVideoRef}
+        autoPlay
+        muted
+        style={{
+          width: "30%",
+          position: "absolute",
+          top: 10,
+          right: 10,
+          borderRadius: 8,
+        }}
+      />
+      <video
+        ref={remoteVideoRef}
+        autoPlay
+        style={{ width: "100%", height: "100%" }}
+      />
+      <IconButton
+        icon={<X />}
+        position="absolute"
+        top={2}
+        right={2}
+        onClick={handleEndCall}
+        colorScheme="red"
+      />
+    </Box>
   );
 }

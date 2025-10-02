@@ -107,7 +107,7 @@ io.on("connection", (socket) => {
     socket.to(to).emit("webrtc-candidate", { candidate });
   });
 
-  socket.on("end-call", ({ to }) => {
-    socket.to(to).emit("call-ended");
-  });
+ socket.on("end-call", ({ toSocketId }) => {
+   io.to(toSocketId).emit("call-ended");
+ });
 });

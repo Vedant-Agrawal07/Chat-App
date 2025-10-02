@@ -23,106 +23,52 @@ import Lottie from "react-lottie";
 import typingAnimation from "../animation/typingAnimation.json";
 
 const ENDPOINT = import.meta.env.VITE_BACKEND_URL;
-
 let socket, selectedChatCompare;
 
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const { user, SelectedChat, setSelectedChat, notification, setNotification } =
     ChatState();
-
   const getSingleChatUserName = () => getSender(user, SelectedChat.users);
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
-  const [socketConnected, setSocketConnected] = useState(false);
-  const [typingIndicator, setTypingIndicator] = useState(false);
   const [showCall, setShowCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [remoteSocketId, setRemoteSocketId] = useState(null);
 
   const toast = useToast();
 
-  // --- Socket Setup ---
+  // Socket setup
   useEffect(() => {
     socket = io(ENDPOINT);
     socket.emit("setup", user);
 
-    socket.on("connected", () => setSocketConnected(true));
+    socket.on("connected", () => console.log("Socket connected"));
 
     socket.on("receive-message", (message) => {
       if (
         !selectedChatCompare ||
         selectedChatCompare._id !== message.chat._id
       ) {
-        if (!notification.some((notif) => notif._id === message._id)) {
+        if (!notification.some((notif) => notif._id === message._id))
           setNotification((prev) => [message, ...prev]);
-          setFetchAgain(!fetchAgain);
-        }
+        setFetchAgain(!fetchAgain);
       } else {
-        setMessages((prev) => {
-          if (!prev.some((msg) => msg._id === message._id))
-            return [...prev, message];
-          return prev;
-        });
+        setMessages((prev) =>
+          !prev.some((m) => m._id === message._id) ? [...prev, message] : prev
+        );
       }
     });
 
-    socket.on("incoming-call", ({ from }) => setIncomingCall(from));
+    // Incoming call with callerSocketId
+    socket.on("incoming-call", ({ fromUserId, callerSocketId }) => {
+      setIncomingCall({ fromUserId, callerSocketId });
+    });
 
-    socket.on("updateRemovedUser", () => setFetchAgain(!fetchAgain));
-
-    return () => {
-      socket.off("receive-message");
-      socket.off("incoming-call");
-      socket.off("updateRemovedUser");
-    };
+    return () => socket.disconnect();
   }, []);
 
-  // --- Send message ---
-  const sendMessage = async (event) => {
-    if (event.key === "Enter" && newMessage) {
-      setLoading(true);
-      try {
-        const config = {
-          headers: {
-            "Content-type": "application/json",
-            authorization: `Bearer ${user.token}`,
-          },
-        };
-        const { data } = await axios.post(
-          `${ENDPOINT}/api/message`,
-          { message: newMessage, chatId: SelectedChat._id },
-          config
-        );
-
-        setNewMessage("");
-        setMessages((prev) => [...prev, data]);
-        socket.emit("send-message", data, SelectedChat._id);
-        setLoading(false);
-      } catch (error) {
-        toast({
-          title: "Error occurred",
-          description: error.message,
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-          position: "bottom",
-        });
-        setLoading(false);
-      }
-    }
-  };
-
-  // --- Typing indicator ---
-  const typingHandler = (e) => {
-    const value = e.target.value;
-    setNewMessage(value);
-
-    if (value === "") socket.emit("typingIndicate", false, SelectedChat._id);
-    else socket.emit("typingIndicate", true, SelectedChat._id);
-  };
-
-  // --- Load messages ---
   const displayAllMessages = async () => {
     if (!SelectedChat) return;
     setLoading(true);
@@ -142,7 +88,6 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         status: "error",
         duration: 5000,
         isClosable: true,
-        position: "bottom",
       });
       setLoading(false);
     }
@@ -160,10 +105,9 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     rendererSettings: { preserveAspectRatio: "xMidYMid slice" },
   };
 
-  // --- Call Button Handler ---
   const handleVideoCall = () => {
     if (!SelectedChat) return;
-    socket.emit("call-user", { chatId: SelectedChat._id, from: user.name });
+    socket.emit("call-user", { fromUserId: user._id });
     setShowCall(true);
   };
 
@@ -171,7 +115,6 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     <>
       {SelectedChat ? (
         <>
-          {/* Chat Header */}
           <Text
             fontSize={{ base: "27px", md: "30px" }}
             pb={3}
@@ -211,7 +154,6 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
             />
           </Text>
 
-          {/* Messages */}
           <Box
             display="flex"
             flexDir="column"
@@ -239,35 +181,20 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 >
                   <ScrollableChat messages={messages} />
                 </div>
-                {typingIndicator && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-start",
-                      height: "40px",
-                      width: "40px",
-                    }}
-                  >
-                    <Lottie
-                      style={{
-                        borderRadius: "10px",
-                        marginTop: "7px",
-                        opacity: "70%",
-                      }}
-                      options={defaultOptions}
-                      height={40}
-                      width={40}
-                    />
-                  </div>
-                )}
               </>
             )}
-            <FormControl onKeyDown={sendMessage} isRequired mt={3}>
+            <FormControl
+              onKeyDown={(e) =>
+                e.key === "Enter" && newMessage && setNewMessage("")
+              }
+              isRequired
+              mt={3}
+            >
               <Input
                 variant="filled"
                 bg="#E0E0E0"
                 placeholder="Enter a Message ..."
-                onChange={typingHandler}
+                onChange={(e) => setNewMessage(e.target.value)}
                 value={newMessage}
               />
             </FormControl>
@@ -286,11 +213,13 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         </Box>
       )}
 
-      {/* Incoming Call Modal */}
+      {/* Incoming Call */}
       {incomingCall && (
         <IncomingCallModal
-          caller={incomingCall}
-          onAccept={() => {
+          caller={incomingCall.fromUserId}
+          callerSocketId={incomingCall.callerSocketId}
+          onAccept={(callerSocketId) => {
+            setRemoteSocketId(callerSocketId);
             setShowCall(true);
             setIncomingCall(null);
           }}
@@ -303,6 +232,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         <VideoCallWindow
           onClose={() => setShowCall(false)}
           chatId={SelectedChat?._id}
+          remoteSocketId={remoteSocketId}
         />
       )}
     </>

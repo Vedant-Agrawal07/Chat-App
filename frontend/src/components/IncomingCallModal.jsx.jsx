@@ -25,6 +25,7 @@ function ActionButton({ icon: Icon, label, tone, onClick }) {
 
 export default function IncomingCallModal({
   caller,
+  callerSocketId,
   subtitle,
   onAccept,
   onReject,
@@ -37,16 +38,13 @@ export default function IncomingCallModal({
       aria-modal="true"
       aria-label="Incoming call"
     >
-      {/* Optional overlay */}
       <div
         className="absolute inset-0 pointer-events-none"
         aria-hidden="true"
       />
 
-      {/* Modal content */}
       <div className="relative z-10 w-full max-w-xl px-6">
         <div className="flex flex-col items-center gap-8 rounded-[2.5rem] border border-white/10 bg-slate-900/40 backdrop-blur-3xl px-10 pb-12 pt-14 text-center shadow-[0_45px_120px_-60px_rgba(4,7,22,0.95)]">
-          {/* Avatar / Caller initials */}
           <div className="relative flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/80 via-blue-600/80 to-blue-700/60 text-4xl font-semibold text-white shadow-xl">
             <span className="absolute -top-4 right-0 h-11 w-11 rounded-full bg-slate-900/50 backdrop-blur-xl">
               <span className="absolute inset-0 animate-pulse rounded-full bg-emerald-400/50" />
@@ -57,7 +55,6 @@ export default function IncomingCallModal({
             {caller.slice(0, 2).toUpperCase()}
           </div>
 
-          {/* Call info */}
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.4em] text-white/60">
               Incoming call
@@ -67,18 +64,17 @@ export default function IncomingCallModal({
               {subtitle || "is inviting you to join a video call session."}
             </p>
             <div className="inline-flex items-center gap-2 rounded-full bg-slate-900/50 backdrop-blur-md border border-white/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.35em] text-white/60">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />{" "}
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               Live video
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="flex flex-wrap items-center justify-center gap-4">
             <ActionButton
               icon={Phone}
               label="Join call"
               tone="positive"
-              onClick={onAccept}
+              onClick={() => onAccept(callerSocketId)}
             />
             <ActionButton
               icon={PhoneOff}
